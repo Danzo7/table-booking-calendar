@@ -8,8 +8,8 @@ function App() {
     <div className="app-container">
       <TableBookingCalendar
         data={data}
-        lockedTime={['11:15']}
-        timeRange={{ endHour: 24, startHour: 8, step: 15 }}
+        lockedTime={['11:15', '11:30', '12:00']}
+        timeRange={{ endHour: 21, startHour: 10, step: 15 }}
         reservationTooltip={(reservation) => (
           <div>
             <ul>
@@ -23,7 +23,7 @@ function App() {
           </div>
         )}
         cellTooltip={(timeBlock) => (
-          <div>
+          <div style={{ fontSize: 'x-small' }}>
             {timeBlock.time}
             <br />
             guest: {timeBlock.reservationGuests}
@@ -37,8 +37,8 @@ function App() {
           console.log(change);
           onChanges(change);
         }}
-        onEmptyCellClick={(time) => {
-          console.log(time);
+        onEmptyCellClick={(timeBlock) => {
+          console.log(timeBlock);
         }}
         onReservationClick={(reservation) => {
           console.log(reservation);
