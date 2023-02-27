@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { ChangeType, Room } from '../types/types';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { addMinutes, format, parse } from 'date-fns';
 
 interface DataState {
   data: Room[];
@@ -19,39 +20,14 @@ export const useDataStore = create<DataState>()(
             {
               id: 1,
               name: 'Table A',
-              capacity: 6,
-              reservations: [
-                {
-                  id: 1,
-                  start: '10:00',
-                  end: '11:45',
-                  capacity: 2,
-                  name: 'Reservation A',
-                },
-                {
-                  id: 2,
-                  start: '12:00',
-                  end: '13:45',
-                  capacity: 2,
-                  name: 'Reservation B',
-                },
-              ],
+              seats: 6,
+              reservations: [],
             },
             {
               id: 2,
               name: 'Table B',
-              capacity: 8,
-              reservations: [
-                {
-                  id: 8,
-                  start: '10:00',
-                  end: '11:00',
-                  capacity: 10,
-                  name: 'Reservation F',
-                  isLocked: true,
-                  color: 'red',
-                },
-              ],
+              seats: 8,
+              reservations: [],
             },
           ],
         },
@@ -60,37 +36,32 @@ export const useDataStore = create<DataState>()(
           name: 'Room B',
           tables: [
             {
-              id: 3,
+              id: 15,
               name: 'Table C',
-              capacity: 6,
+              seats: 6,
               reservations: [
                 {
-                  id: 3,
-                  start: '17:00',
-                  end: '18:45',
-                  capacity: 2,
-                  name: 'Reservation C',
-                },
-                {
-                  id: 4,
-                  start: '13:00',
-                  end: '14:45',
-                  capacity: 2,
-                  name: 'Reservation D',
+                  id: 9,
+                  time: '20:00',
+                  end: '21:00',
+                  persons: 2,
+                  name: '',
+                  lock_tables: false,
                 },
               ],
             },
             {
               id: 4,
               name: 'Table D',
-              capacity: 8,
+              seats: 8,
               reservations: [
                 {
-                  id: 5,
-                  start: '15:00',
-                  end: '16:00',
-                  capacity: 10,
-                  name: 'Reservation E',
+                  id: 3,
+                  time: '08:20',
+                  end: '10:20',
+                  persons: 2,
+                  name: 'Reservation C',
+                  lock_tables: false,
                 },
               ],
             },
@@ -104,7 +75,11 @@ export const useDataStore = create<DataState>()(
             room.tables.filter((table) =>
               table.reservations.map((reservation) => {
                 if (reservation.id === change.reservation.id) {
-                  reservation.end = change.newEndTime;
+                  if ((change as any).from === 'end') {
+                    reservation.end = (change as any).newEndTime;
+                  } else if ((change as any).from === 'start') {
+                    reservation.time = (change as any).newStartTime;
+                  }
                 }
                 return reservation;
               }),
@@ -123,13 +98,13 @@ export const useDataStore = create<DataState>()(
               .find((room) =>
                 room.tables.find((table) =>
                   table.reservations.find(
-                    (reservation) => reservation.id === change.reservation.id,
+                    (reservation) => (reservation.id === change.reservation.id && change.prevTableId === table.id)
                   ),
                 ),
               )
               ?.tables.find((table) =>
                 table.reservations.find(
-                  (reservation) => reservation.id === change.reservation.id,
+                  (reservation) => (reservation.id === change.reservation.id && change.prevTableId === table.id)
                 ),
               )?.reservations ?? [];
           data
@@ -137,10 +112,14 @@ export const useDataStore = create<DataState>()(
               room.tables.find((table) => table.id === change.newTableId),
             )
             ?.tables.find((table) => table.id === change.newTableId)
-            ?.reservations.push(change.reservation);
+            ?.reservations.push({
+              ...change.reservation,
+              time: change.newTimeStart,
+              end: change.end,
+            });
           reservationTable.splice(
             reservationTable.findIndex(
-              (reservation) => reservation.id === change.reservation.id,
+              (reservation) => (reservation.id === change.reservation.id)
             ),
             1,
           );

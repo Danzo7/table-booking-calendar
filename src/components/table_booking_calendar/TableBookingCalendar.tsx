@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useRef } from 'react';
 import CapacityCell from './components/capacity_cell';
 import './style/index.scss';
 import {
@@ -21,39 +21,43 @@ import { Tooltip } from 'react-tooltip';
 import 'react-tooltip/dist/react-tooltip.css';
 import TimeIndicator from './components/time_indicator';
 import { calculateTimeBlock } from '../../helpers/math.helper';
+import { addMinutes, format, parse } from 'date-fns';
 
 interface TableBookingCalendarProps {
   data: Room[];
   timeRange: TimeRange;
   lockedTime: string[];
+  times: string[];
+  noNameText?: string;
   cellTooltip?: (time: TimeBlock) => React.ReactNode;
+  reservationColor?: (reservation: Reservation) => string;
   reservationTooltip?: (reservation: Reservation) => React.ReactNode;
   reservationModal?: (
     reservation: Reservation,
     close: () => void,
   ) => React.ReactNode;
   capacityModal?: (time: TimeBlock, close: () => void) => React.ReactNode;
-  onEmptyCellClick?: (time: TimeBlock) => void;
+  onEmptyCellClick?: (time: TimeBlock, table: string | number) => void;
   onReservationChange?: (change: ChangeType) => void;
   onReservationClick?: (reservation: Reservation) => void;
 }
 
 export default function TableBookingCalendar({
-  data,
+  data = [],
   timeRange,
-  lockedTime,
+  times = [],
+  lockedTime = [],
+  noNameText = 'no name',
   reservationTooltip,
   onReservationChange,
   cellTooltip,
+  reservationColor,
   onEmptyCellClick,
   reservationModal,
   capacityModal,
   onReservationClick,
 }: TableBookingCalendarProps) {
-  const rangeList = useMemo(
-    () => rangeToTime(timeRange.startHour, timeRange.endHour, timeRange.step),
-    [timeRange],
-  );
+  const rangeList = useMemo(() => rangeToTime(times), [times]);
   const tableCount = useMemo(
     () => data.reduce((acc, { tables }) => acc + tables.length, 0),
     [data],
@@ -72,6 +76,11 @@ export default function TableBookingCalendar({
     () => rangeList.map((time) => calculateTimeBlock(data, time)),
     [data, rangeList],
   );
+
+  // useEffect(() => {
+  //   // console.log('Latest Version');
+  // }, []);
+
   return (
     <div
       className="table-booking-calendar"
@@ -89,7 +98,7 @@ export default function TableBookingCalendar({
     >
       <DndContext
         onDragStart={(e) => {
-          if (e?.active?.data?.current?.isLocked) {
+          if (e?.active?.data?.current?.lock_tables) {
             lockedMovingRef.current = true;
           } else lockedMovingRef.current = false;
           useEventsStore.getState().setIsDraging(true);
@@ -99,12 +108,42 @@ export default function TableBookingCalendar({
           lockedMovingRef.current = false;
           useEventsStore.getState().setIsDraging(false);
 
-          if (e.over?.id != undefined)
-            onReservationChange?.({
-              type: 'moved',
-              newTableId: Number(e.over.id),
-              reservation: e.active.data.current as any,
+          if (e.over?.id != undefined) {
+            const [prevTableId] = e.active.id.toString().split('-');
+            const { reservation, diffResult } = e.active.data.current!;
+            const wtd =
+              document.querySelector('.table-item')?.getClientRects()[0]
+                ?.width ?? 0;
+            const factor = Math.floor(Math.abs(e.delta.x) / wtd);
+            const directionNumber = e.delta.x < 0 ? -1 : 1;
+            const index = rangeList.findIndex((range) => {
+              const { hour, minute } = range;
+              const [h, m] = reservation.time.split(':');
+
+              const diff = +m - +minute;
+              if (h === hour && diff <= 14 && diff >= 0) {
+                return true;
+              }
+              return false;
             });
+            const timeIndex = factor * directionNumber + index;
+            const { hour, minute } = rangeList[timeIndex];
+            const timeStart = format(
+              addMinutes(
+                parse(`${hour}:${minute}`, 'HH:mm', new Date()),
+                diffResult,
+              ),
+              'HH:mm',
+            );
+            const newData = {
+              prevTableId: +prevTableId,
+              type: 'moved',
+              newTimeStart: timeStart,
+              newTableId: Number(e.over.id),
+              reservation,
+            };
+            onReservationChange?.(newData as any);
+          }
         }}
       >
         <table
@@ -126,7 +165,7 @@ export default function TableBookingCalendar({
               )}
             </tr>
             <tr className="capacity">
-              <td>Capacity</td>
+              <td></td>
               {rangeList.map((time, index) => {
                 const isLocked = lockedTime.includes(
                   `${time.hour}:${time.minute}`,
@@ -154,7 +193,7 @@ export default function TableBookingCalendar({
                 (acc, table) =>
                   acc +
                   table.reservations.reduce(
-                    (ac, reservation) => ac + reservation.capacity,
+                    (ac, reservation) => ac + reservation.persons,
                     0,
                   ),
                 0,
@@ -175,13 +214,15 @@ export default function TableBookingCalendar({
                   {room.tables.map((table, index) => {
                     return (
                       <RoomTable
+                        noNameText={noNameText}
                         row={index + tableBefore}
                         key={table.id}
-                        table={table}
                         rangeList={rangeList}
+                        reservationColor={reservationColor}
+                        table={table}
                         onReservationChange={onReservationChange}
                         onEmptyCellClick={(tIndex) =>
-                          onEmptyCellClick?.(timeBlocks[tIndex])
+                          onEmptyCellClick?.(timeBlocks[tIndex], table.id)
                         }
                         reservationModal={reservationModal}
                         onReservationClick={onReservationClick}

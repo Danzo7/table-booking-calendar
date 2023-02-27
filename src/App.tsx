@@ -1,19 +1,69 @@
+import { useEffect, useState } from 'react';
 import './App.scss';
 import TableBookingCalendar from './components/table_booking_calendar';
 import { useDataStore } from './store/dataStore';
+import { format, differenceInMinutes, parse, addMinutes } from 'date-fns';
+
+export const getIntervalTimes = ({
+  startTime = '00:00',
+  endTime = '23:59',
+  interval = 15,
+}) => {
+  const start = startTime.split(':');
+  const end = endTime.split(':');
+
+  const startMinutes = +start[0] * 60 + +start[1];
+  const endMinutes = +end[0] * 60 + +end[1];
+
+  const difference = endMinutes - startMinutes;
+
+  const length = Math.ceil(difference / interval);
+
+  const times: string[] = [];
+
+  for (let i = 0; i < length + 1; i++) {
+    const time = Math.min(startMinutes + i * interval, endMinutes);
+
+    let hours: string | number = Math.floor(time / 60);
+    let minutes: string | number = time % 60;
+
+    hours = hours > 9 ? hours : `0${hours}`;
+    minutes = minutes > 9 ? minutes : `0${minutes}`;
+
+    times.push(`${hours}:${minutes}`);
+  }
+
+  return times;
+};
 
 function App() {
-  const { data, onChanges } = useDataStore();
+  const { data, onChanges, setData } = useDataStore();
+
+  useEffect(() => {
+    const getData = async () => {
+      // await new Promise((resolve) => setTimeout(resolve, 2000));
+      // setData([
+      // ]);
+    };
+    getData();
+  }, []);
+
+  // console.log(data);
+
   return (
     <div className="app-container">
       <TableBookingCalendar
         data={data}
         lockedTime={['11:15']}
+        times={getIntervalTimes({
+          startTime: '08:00',
+          endTime: '21:00',
+        })}
         timeRange={{ endHour: 24, startHour: 8, step: 15 }}
         reservationTooltip={(reservation) => (
           <div style={{ fontSize: 'x-small' }}>
-            ({reservation.name}),{reservation.capacity} pers. <br />
-            {reservation.start} - {reservation.end}
+            ({reservation.name}),{reservation.persons} pers. <br />
+            {reservation.time} - {reservation.end}
           </div>
         )}
         cellTooltip={(timeBlock) => (
@@ -28,14 +78,35 @@ function App() {
           </div>
         )}
         onReservationChange={(change) => {
-          console.log(change);
-          onChanges(change);
+          // console.log(change);
+          if (change.type === 'moved') {
+            const startTIme = parse(
+              change.reservation.time,
+              'HH:mm',
+              new Date(),
+            );
+            const endTIme = parse(change.reservation.end, 'HH:mm', new Date());
+            const duration = differenceInMinutes(endTIme, startTIme);
+            const newEndTime = format(
+              addMinutes(
+                parse(change.newTimeStart, 'HH:mm', new Date()),
+                duration,
+              ),
+              'HH:mm',
+            );
+            onChanges({ ...change, end: newEndTime });
+          } else {
+            onChanges(change);
+          }
         }}
-        onEmptyCellClick={(time) => {
-          console.log(time);
+        onEmptyCellClick={(time, tableID) => {
+          console.log(time, tableID);
         }}
         onReservationClick={(reservation) => {
           console.log(reservation);
+        }}
+        reservationColor={(reservation) => {
+          return '#b95501';
         }}
         reservationModal={(reservation, close) => {
           return (
@@ -49,8 +120,8 @@ function App() {
                 gap: 10,
               }}
             >
-              ({reservation.name}),{reservation.capacity} pers. <br />
-              {reservation.start} - {reservation.end}
+              ({reservation.name}),{reservation.persons} pers. <br />
+              {reservation.time} - {reservation.end}
               <button onClick={close}>Close</button>
             </div>
           );
